@@ -1,0 +1,112 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[legalpaper, margin=0.5in]{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+
+%New colors defined below
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+%Code listing style named "mystyle"
+\lstdefinestyle{mystyle}{
+  backgroundcolor=\color{backcolour},   commentstyle=\color{codegreen},
+  keywordstyle=\color{magenta},
+  numberstyle=\tiny\color{codegray},
+  stringstyle=\color{codepurple},
+  basicstyle=\ttfamily\footnotesize,
+  breakatwhitespace=false,         
+  breaklines=true,                 
+  captionpos=b,                    
+  keepspaces=true,                 
+  numbersep=5pt,                  
+  showspaces=false,                
+  showstringspaces=false,
+  showtabs=false,                  
+  tabsize=2
+}
+
+%"mystyle" code listing set
+\lstset{style=mystyle}
+
+\title{Lesson 5: Computer Vision Fundamentals}
+\author{jinil }
+\date{October 2019}
+
+\begin{document}
+
+\maketitle
+
+\section{Canny Edge Detection}
+
+\begin{lstlisting}[language=Python]
+#doing all the relevant imports
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+import numpy as np
+import cv2
+
+# Read in the image and convert to grayscale
+image = mpimg.imread('exit-ramp.jpg')
+gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+
+# Define a kernel size for Gaussian smoothing / blurring
+# Note: this step is optional as cv2.Canny() applies a 3x3 Gaussian internally
+kernel_size = 3
+blur_gray = cv2.GaussianBlur(gray,(kernel_size, kernel_size), 0)
+
+# Define parameters for Canny and run it
+low_threshold = 1
+high_threshold = 10
+edges = cv2.Canny(blur_gray, low_threshold, high_threshold)
+
+# Display the image
+plt.imshow(edges, cmap='Greys_r')
+\end{lstlisting}
+
+\section{Hough Transform}
+Conversion from image space to Hough space.
+Represent "x vs. y" line as a point in "m vs. b" where
+\[y = mx + b\]
+
+\begin{lstlisting}[language=Python]
+# Define the Hough transform parameters
+# Make a blank the same size as our image to draw on
+rho = 1
+theta = np.pi/180
+threshold = 1
+min_line_length = 10
+max_line_gap = 1
+line_image = np.copy(image)*0 #creating a blank to draw lines on
+
+# Run Hough on edge detected image
+lines = cv2.HoughLinesP(edges, rho, theta, threshold, np.array([]),
+                            min_line_length, max_line_gap)
+
+# Iterate over the output "lines" and draw lines on the blank
+for line in lines:
+    for x1,y1,x2,y2 in line:
+        cv2.line(line_image,(x1,y1),(x2,y2),(255,0,0),10)
+
+# Create a "color" binary image to combine with line image
+color_edges = np.dstack((edges, edges, edges)) 
+
+# Draw the lines on the edge image
+combo = cv2.addWeighted(color_edges, 0.8, line_image, 1, 0) 
+plt.imshow(combo)
+\end{lstlisting}
+
+\section{Finding Lines}
+\begin{enumerate}
+    \item Gray Image
+    \item Gaussian Blur
+    \item Canny
+    \item Region of Interest
+    \item Hough Lines
+\end{enumerate}
+
+\end{document}
+
+

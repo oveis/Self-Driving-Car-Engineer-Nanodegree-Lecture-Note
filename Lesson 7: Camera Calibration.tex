@@ -1,0 +1,175 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[legalpaper, margin=0.5in]{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+
+\setlength{\parindent}{0em}
+\setlength{\parskip}{1em}
+
+%New colors defined below
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+%Code listing style named "mystyle"
+\lstdefinestyle{mystyle}{
+  backgroundcolor=\color{backcolour},   commentstyle=\color{codegreen},
+  keywordstyle=\color{magenta},
+  numberstyle=\tiny\color{codegray},
+  stringstyle=\color{codepurple},
+  basicstyle=\ttfamily\footnotesize,
+  breakatwhitespace=false,         
+  breaklines=true,                 
+  captionpos=b,                    
+  keepspaces=true,                 
+  numbersep=5pt,                  
+  showspaces=false,                
+  showstringspaces=false,
+  showtabs=false,                  
+  tabsize=2
+}
+
+%"mystyle" code listing set
+\lstset{style=mystyle}
+
+\graphicspath{{resources/}}
+
+\title{Lesson 7: Camera Calibration}
+\author{jinil }
+\date{October 2019}
+
+\begin{document}
+
+\maketitle
+
+\section{Distortion}
+
+\subsection{Radial distortion}
+
+Real cameras use curved lenses to form an image, and light rays often bend a little too much or too little at the edges of these lenses. This creates an effect that distorts the edges of images, so that lines or objects appear more or less curved than they actually are.
+
+\[x_{distorted} = x_{ideal}(1 + k_1r^2 + k_2r^4 + k_3r^6)\]
+\[y_{distorted} = y_{ideal}(1 + k_1r^2 + k_2r^4 + k_3r^6)\]
+
+, where \textbf{r} is the known distance between a point in an undistorted (corrected) image and the center of the image distortion, which is often the center of that image $(x_c, y_c)$.
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=15cm]{distortion.png}
+    \label{fig:distortion}
+\end{figure}
+
+\subsection{Tangential distortion}
+
+This occurs when a camera’s lens is not aligned perfectly parallel to the imaging plane, where the camera film or sensor is. This makes an image look tilted so that some objects appear farther away or closer than they actually are.
+
+\[x_{corrected} = x + [2p_1xy + p_2(r^2 + 2x^2)]\]
+\[y_{corrected} = y + [p_1(r^2 + 2y^2) + 2p_2xy]\]
+
+\section{Finding Corners}
+
+\begin{lstlisting}[language=Python]
+import numpy as np
+import cv2
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+
+# prepare object points
+nx = 8 #Number of inside corners in x
+ny = 6 #Number of inside corners in y
+
+# Make a list of calibration images
+fname = 'calibration_test.png'
+img = cv2.imread(fname)
+
+# Convert to grayscale
+gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+# Find the chessboard corners
+ret, corners = cv2.findChessboardCorners(gray, (nx, ny), None)
+
+# If found, draw corners
+if ret == True:
+    # Draw and display the corners
+    cv2.drawChessboardCorners(img, (nx, ny), corners, ret)
+    plt.imshow(img)
+\end{lstlisting}
+
+\section{Camera Calibration}
+
+Extract object points and image points for camera calibration.
+\begin{lstlisting}[language=Python]
+import numpy as np
+import cv2
+import glob
+import matplotlib.pyplot as plt
+%matplotlib qt
+
+# prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
+objp = np.zeros((6*8,3), np.float32)
+objp[:,:2] = np.mgrid[0:8, 0:6].T.reshape(-1,2)
+
+# Arrays to store object points and image points from all the images.
+objpoints = [] # 3d points in real world space
+imgpoints = [] # 2d points in image plane.
+
+# Make a list of calibration images
+images = glob.glob('calibration_wide/GO*.jpg')
+
+# Step through the list and search for chessboard corners
+for idx, fname in enumerate(images):
+    img = cv2.imread(fname)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # Find the chessboard corners
+    ret, corners = cv2.findChessboardCorners(gray, (8,6), None)
+
+    # If found, add object points, image points
+    if ret == True:
+        objpoints.append(objp)
+        imgpoints.append(corners)
+
+        # Draw and display the corners
+        cv2.drawChessboardCorners(img, (8,6), corners, ret)
+        #write_name = 'corners_found'+str(idx)+'.jpg'
+        #cv2.imwrite(write_name, img)
+        cv2.imshow('img', img)
+        cv2.waitKey(500)
+
+cv2.destroyAllWindows()
+\end{lstlisting}
+
+Calculate distortion coefficients, and undistortion on an image.
+\begin{lstlisting}[language=Python]
+import pickle
+%matplotlib inline
+
+# Test undistortion on an image
+img = cv2.imread('calibration_wide/test_image.jpg')
+img_size = (img.shape[1], img.shape[0])
+
+# Do camera calibration given object points and image points
+ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size,None,None)
+
+
+dst = cv2.undistort(img, mtx, dist, None, mtx)
+cv2.imwrite('calibration_wide/test_undist.jpg',dst)
+
+# Save the camera calibration result for later use (we won't worry about rvecs / tvecs)
+dist_pickle = {}
+dist_pickle["mtx"] = mtx
+dist_pickle["dist"] = dist
+pickle.dump( dist_pickle, open( "calibration_wide/wide_dist_pickle.p", "wb" ) )
+#dst = cv2.cvtColor(dst, cv2.COLOR_BGR2RGB)
+# Visualize undistortion
+f, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,10))
+ax1.imshow(img)
+ax1.set_title('Original Image', fontsize=30)
+ax2.imshow(dst)
+ax2.set_title('Undistorted Image', fontsize=30)
+\end{lstlisting}
+
+\end{document}
