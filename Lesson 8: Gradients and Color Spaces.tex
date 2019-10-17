@@ -274,11 +274,69 @@ $$H \leftarrow 120 + \frac{30(R-G)}{V_{max}-V_{min}}, if V_{max} = B$$
 
 \textbf{L} channel conversion equation
 
-$$L \leftarrow \frac{V_{max} + V_{min}}{2}
+$$L \leftarrow \frac{V_{max} + V_{min}}{2}$$
 
 \textbf{S} channel conversion equations
 
 $$S \leftarrow \frac{V_{max} - V_{min}}{V_{max} + V_{min}}, if L < 0.5$$
 $$S \leftarrow \frac{V_{max} - V_{min}}{2 - (V_{max} + V_{min})}, if L \geq 0.5$$
+
+\section{HLS and Color Thresholds}
+
+\begin{lstlisting}[language=Python]
+hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
+H = hls[:,:,0]
+L = hls[:,:,1]
+S = hls[:,:,2]
+
+thresh = (90, 255)
+binary = np.zeros_like(S)
+binary[(S > thresh[0]) & (S <= thresh[1])] = 1
+\end{lstlisting}
+
+\section{Combine color and gradient}
+
+\begin{lstlisting}[language=Python]
+# Convert to HLS color space and separate the S channel
+# Note: img is the undistorted image
+hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
+s_channel = hls[:,:,2]
+
+# Grayscale image
+# NOTE: we already saw that standard grayscaling lost color information for the lane lines
+# Explore gradients in other colors spaces / color channels to see what might work better
+gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+# Sobel x
+sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0) # Take the derivative in x
+abs_sobelx = np.absolute(sobelx) # Absolute x derivative to accentuate lines away from horizontal
+scaled_sobel = np.uint8(255*abs_sobelx/np.max(abs_sobelx))
+
+# Threshold x gradient
+thresh_min = 20
+thresh_max = 100
+sxbinary = np.zeros_like(scaled_sobel)
+sxbinary[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
+
+# Threshold color channel
+s_thresh_min = 170
+s_thresh_max = 255
+s_binary = np.zeros_like(s_channel)
+s_binary[(s_channel >= s_thresh_min) & (s_channel <= s_thresh_max)] = 1
+
+# Stack each channel to view their individual contributions in green and blue respectively
+# This returns a stack of the two binary images, whose components you can see as different colors
+color_binary = np.dstack(( np.zeros_like(sxbinary), sxbinary, s_binary)) * 255
+
+# Combine the two binary thresholds
+combined_binary = np.zeros_like(sxbinary)
+combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
+\end{lstlisting}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=15cm]{color_gradient.png}
+    \label{fig:color_gradient}
+\end{figure}
 
 \end{document}
